@@ -1,2 +1,2 @@
+python-gitlab==1.7.0
 GitPython==2.1.11
-requests==2.20.1
