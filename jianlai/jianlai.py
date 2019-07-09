@@ -2,11 +2,20 @@
 #!/usr/bin/python3
 
 import os
+import sys
 from bs4 import BeautifulSoup
 import requests
-import schedule
+from dbutil import DbOperate, Dbconn
+import logging
+import configparser
 
-CHAPTER_NUM_TXT = os.path.join(os.path.split(os.path.realpath(__file__))[0], "chapter_num.txt")
+config = configparser.ConfigParser()
+config.read(os.path.join(sys.path[0], 'config.ini'), encoding="utf-8")
+token = config.get("ServerChan", "token")
+path = config.get("ServerChan", "url")
+path_url = '%s%s.send?text=主人剑来更新啦~' % (path, token)
+
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(module)s - %(message)s')
 
 def getChapterNo():
     headers = {
@@ -19,8 +28,8 @@ def getChapterNo():
 
     title = soup.select(".book-new-chapter .tit a")[0].text
     chapter = title[1:(title.index(u'章'))]
-    print(chapter)
     chapter_num = chinese2digits(chapter)
+    logging.info("最新章节：%s", chapter_num)
     return chapter_num
 
 def chinese2digits(chiness_chars):
@@ -42,43 +51,28 @@ def chinese2digits(chiness_chars):
                 r = r * num
         else:
             total = total + r * num
-    print(total)
     return total
 
 def getOldChapterNo():
-    if os.path.exists(CHAPTER_NUM_TXT):
-        with open(CHAPTER_NUM_TXT, "r") as f:
-            f = open(CHAPTER_NUM_TXT, "r")
-            return int(f.readline())
-    else:
-        return None
+    dbConn = Dbconn(config)
+    dbOperate = DbOperate(dbConn.get_conn())
+    return dbOperate.get_chapter()
 
 def setChapterNo(chapterNo):
-    with open(CHAPTER_NUM_TXT, "w") as f:
-        f.write(str(chapterNo))
+    dbConn = Dbconn(config)
+    dbOperate = DbOperate(dbConn.get_conn())
+    dbOperate.update_chapter(chapterNo)
 
 def checkOrSaveChapterNo(chapterNo):
     old_no = getOldChapterNo()
     if old_no is None or chapterNo > old_no:
-        response = requests.get("https://sc.ftqq.com/xxxxxx.send?text=主人剑来更新啦~")
+        response = requests.get(path_url)
         print(response.json())
         setChapterNo(chapterNo)
-        print("更新，已通知")
+        logging.info("更新了，已通知")
     else:
-        response = requests.get("https://sc.ftqq.com/xxxxxx.send?text=主人剑来未更新啦~")
-        print("未更新，不通知")
+        logging.info("未更新，不通知")
 
 def job():
-    # print(chinese2digits("一百一十"))
     current_no = getChapterNo()
     checkOrSaveChapterNo(current_no)
-
-schedule.every().hour.do(job)
-
-if __name__ == "__main__":
-    job()
-    while True:
-        schedule.run_pending()
-
-    
-  
